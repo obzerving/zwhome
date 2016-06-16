@@ -6,7 +6,7 @@ This system is built around three major software components, which need to be co
 
 1.  zwhome: This is a custom software program that provides these functions
   - Support for Z-wave device switches and 4-in-1 multi-sensor
-  - Support for custom wifi sensors
+  - Support for custom wifi sensors (https://github.com/obzerving/OTALightSensor)
   - Rules-based scheduling of device actions up to one year in advance
   - Recovery of device states after power failure
   - Support for immediate control of device actions through a restful service
