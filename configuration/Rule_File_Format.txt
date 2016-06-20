@@ -1,0 +1,68 @@
+Writing Rules
+
+Rule file formats
+1. <Action> <device|devicelist> FROM|FROM! <date|datelist> AT <time|timelist> TO|TO!|TO@ <date|datelist> AT <time|timelist>
+
+2. <Action> <device|devicelist> FROM|FROM! <date|datelist> AT <time|timelist> TO|TO!|TO@ <date|datelist> AT <time|timelist> IF|EXCEPT-IF FROM <date|datelist> AT <time|timelist> TO <date|datelist> AT <time|timelist>
+
+3. <Action> <device|devicelist> FROM|FROM! <date|datelist> AT <time|timelist> TO|TO!|TO@ <date|datelist> AT <time|timelist> WHEN|EXCEPT-WHEN <sensor> is|is-less-than|is-greater-than <sensor value>
+
+4. <Action> <device|devicelist> ON|ON! <date|datelist> AT <time|timelist>
+
+5. <Action> <device|devicelist> ON|ON! <date|datelist> AT <time|timelist> IF|EXCEPT-IF FROM <date|datelist> AT <time|timelist> TO <date|datelist> AT <time|timelist>
+
+6. <Action> <device|devicelist> ON|ON! <date|datelist> AT <time|timelist>  WHEN|EXCEPT-WHEN <sensor> <|=|> <sensor value>
+
+where
+<Action> can be either "turn-on" or "turn-off" (no quotes)
+<device|devicelist> can be either a single switch-type device (e.g. chandelier) or list of devices (e.g. chandelier|deck-light)
+<date|datelist> can be either a single date (e.g. 1-jan) or a list of dates (e.g 1-jan|20-feb|monday)
+<time|timelist> can be an absolute 24-hour time (e.g. 2300), relative to sunrise (e.g. sunrise+10 means 10 minutes after sunrise) or relative to sunset (e.g. sunset-90 means 90 minutes before sunset).
+
+Example rules:
+# Turn on the crockpot every friday at 10am and turn it off on saturday at 1PM
+turn-on crockpot from friday at 1000 to saturday at 1300
+
+# turn-on the chandelier 90 minutes before sunset on the next occurance of january 25 (including today if today is 25-jan) and turn it off the next sunday at midnight
+turn-on chandelier from 25-jan at sunset-90 to sunday at 0000
+
+# turn-off the kitchen light on saturday and sunday from sunrise to sunset
+# The from! keyword ensures that, while the time is between the FROM and TO dates/times, even if someone turns on the light manually, it will go off again within five minutes
+# The to! keyword ensures that after the TO date/time, even if someone turns off the light after sunset, it will come back on again after five minutes
+turn-off kitchen-light from! saturday|sunday at sunrise to! saturday|sunday at sunset
+
+# The to@ keyword is like the to! keyword, but instead of the device changing state when the TO date/time is reached, the system just stops enforcing the device's current state.
+# So, the following rule works like the previous one except that the light can be turned off after sunset and it won't come back on again.
+turn-off kitchen-light from! saturday|sunday at sunrise to@ saturday|sunday at sunset
+
+# turn on the chandelier and kitchen light every saturday from 9PM to 11PM unless it's January 1 or December 25
+turn-on chandelier|kitchen-light from saturday at 2100 to saturday at 2300 except-if from 1-jan|25-dec at 0000 to 1-jan|25-dec at 2359
+# alternate way of writing this rule
+turn-on chandelier|kitchen-light from saturday at 2100 to saturday at 2300 except-if from 1-jan|25-dec to 1-jan|25-dec
+# yet another alternate way
+turn-on chandelier|kitchen-light from saturday at 2100 to saturday at 2300 except-if on 1-jan|25-dec
+
+# turn on the chandelier every saturday from noon to 3PM if the light sensor reads less than 400 lux
+# What really happens:	The program will check the sensor (every 10 minutes if the device is off; every 30 minutes if the device is on) between the hours of noon and 3PM on Saturday. On each check,
+#			If the sensor reads less than 400 lux, the chandelier will turn on (or stay on).
+#			If the sensor reads more than 400 lux, the chandelier will turn off (or stay off).
+# This means it's possible that you could have the light cycling on every 10 minutes and off every 30 minutes.
+# When the rule becomes inactive at 3PM, the device will remain in the same state as the last command it was given.
+turn-on chandelier from saturday at 1200 to saturday at 1500 when light-sensor < 400
+
+Rule constraints
+1. The From-event-date may be any combination of date types
+2. The number of From-event-times must either equal the number of From-event-dates or be a single time. If a single time, the list of From-event-times will be filled out to the number of From-event-dates by repeating it.
+3. The number of To-event-dates must equal the number of From-event-dates.
+4. The number of To-event-times must either equal the number of To-event-dates or be a single time. If a single time, the list of To-event-times will be filled out to the number of To-event-dates by repeating it.
+5. The On-event-date may be any combination of date types
+6. The number of On-event-times must either equal the number of On-event-dates or be a single time. If a single time, the list of On-event-times will be filled out to the number of On-event-dates by repeating it.
+7. If a time-bound condition clause (IF|EXCEPT-IF) is present, it is checked before the event clause.
+8. The From-condition-date may be any combination of date types
+9. The number of From-condition-times must either equal the number of From-condition-dates or be a single time. If a single time, the list of From-condition-times will be filled out to the number of From-condition-dates by repeating it.
+10. The number of To-condition-dates must equal the number of From-condition-dates.
+11. The number of To-condition-times must either equal the number of To-condition-dates or be a single time. If a single time, the list of To-condition-times will be filled out to the number of To-condition-dates by repeating it.
+12. If a sensor-bound condition clause (WHEN|EXCEPT-WHEN) is present, it is checked before the event clause.
+13. The AT keyword is optional. If it's missing after the From-event-date or From-condition-date, it is assumed to be 0000. If missing after the To-event-date or To-condition-date, it is assumed to be 2359.
+14. Overlapping event dates/times in a given rule should be avoided because it will produce unpredictable results. It's better to have a rule with the same event time period for all the event date periods. For example, it's okay to have a date list from Tuesday|4-Jul to Tuesday|4-Jul, even if July 4th comes out on a Tuesday this year. However, you wouldn't want a time list of 0700|0900 to 1700|1500.
+15. In theory, once an ON event triggers, the device(s) should enter the <action> state (i.e. on or off) and stay there forever. In practice, the ON clause really means "FROM <datelist> AT <timelist> TO 31-DEC AT 2359"

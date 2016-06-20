@@ -1,0 +1,66 @@
+Configuration File Format
+
+By default, zwhome looks for a file named zwconfig.txt. Under Linux, you can specify a different configuration file by putting its name after the program name (e.g. "zwhome zwconfig.txt"). Each line is of the format
+
+command_type parameter1 parameter2
+
+The recognized command_types and their associated parameters are:
+
+switch device_name zwave_device_info
+
+This is used for specifying on-off (switch-type) devices to zwHome. You give it a name that you can reference in the rules file. The zwave_device_info (nodeId|valueid.Genre|valueid.CommandClassId|valueid.Instance|valueid.Index|valueid.Type|Capabilities) is found by looking in the OZW_log.txt file. The Capabilities field is a number indicating whether the device is controlling lights and whether those lights are dimmable. It is determined this way:
+
+If the device is controlling a light, add one. If the light is dimmable, add 2. So, a dimmable light has a capability of 3. A non-dimmable light has a capability of 1.
+
+sensor sensor_name zwave_device_info
+
+This is used for specifying z-wave sensor devices. You give it a name you can reference in the rules file. The zwave_device_info (nodeId|valueid.Genre|valueid.CommandClassId|valueid.Instance|valueid.Index|valueid.Type) is found by looking in the OZW_log.txt file.
+
+wifisensor sensor_name wifi_device_info
+
+This is used for specifying a custom wifi sensor device. You give it a name you can reference in the rules file. The wifi_device_info (RESTuri|Capabilities). The Capabilities field is a number indicating what type of sensor it is. The definitions are
+1 - Motion Sensor
+2 - Humidity Sensor
+4 - Temperature Sensor
+8 - Light Sensor
+
+For example, the OTALightSensor, whose IP address is 192.168.1.2, would be defined as
+wifisensor garden_light_sensor http://192.168.1.2/luminance|8
+
+days english sunday|monday|tuesday|wednesday|thursday|friday|saturday
+
+This command allows you to specify how you reference the days of the week in the rules file. If you didn't have this line in the config file, it would default to "sunday" ... "saturday"
+
+months gregorian jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec
+
+This command allows you to specify how you reference the months of the year in the rules file. If you didn't have this line in the config file, it would default to "jan" ... "dec"
+
+months hebrew tishrei|cheshvan|kislev|teves|shvat|adar|nissan|iyar|sivan|tamuz|av|elul|adar1|adar2
+
+You can specify a date in the Hebrew calendar, too. This command allows you to specify how you reference the hebrew months of the year in the rules file. If you didn't have this line in the config file, it would default to "tishrei" ... "adar2"
+
+file file_name file_path
+
+This is used to specify files used by zwHome. Right now, you must specify the "rules" file_name in the config file. For example,
+
+file rules /home/pi/rulefile.txt
+
+In this example, the file "rulefile.txt" must exist in the /home/pi directory before zwHome is launched.
+
+define label_name definition
+
+This is used to define a text string that will be substituted for its definition in the rules file. For example, if you place this command in the config.txt file
+
+define weekend saturday|sunday
+
+and place this rule in the rules file
+
+turn-on kitchen-light from weekend at 0900 to weekend at 1700
+
+it will be the same as if you wrote the rule
+
+turn-on kitchen-light from saturday|sunday at 0900 to saturday|sunday at 1700
+
+***NOTE: There is a mandatory define needed by the program. The home ID of the controller must be specified as follows (in this example, 0x12345678 is the home ID):
+
+define home-id 0x12345678
