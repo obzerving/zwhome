@@ -39,6 +39,10 @@ months hebrew tishrei|cheshvan|kislev|teves|shvat|adar|nissan|iyar|sivan|tamuz|a
 
 You can specify a date in the Hebrew calendar, too. This command allows you to specify how you reference the hebrew months of the year in the rules file. If you didn't have this line in the config file, it would default to "tishrei" ... "adar2"
 
+location home latitude|longitude|timezone
+
+This command allows you to specify your home location. If you didn't have this line in the config file, the location would default to "39.3|-76.6| -5"
+
 file file_name file_path
 
 This is used to specify files used by zwHome. Right now, you must specify the "rules" file_name in the config file. For example,
