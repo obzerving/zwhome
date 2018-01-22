@@ -12,52 +12,88 @@ zwhome Software Installation
   - sudo apt-get install libhdate-dev
   - sudo apt-get install libtelnet-dev
 - Build open-zwave library
-  - Download a release of open-zwave (latest is version 1.4 as of this writing) from https://github.com/OpenZWave/open-zwave/releases
+  - Download a release of open-zwave (latest is version 1.5 as of this writing) from https://github.com/OpenZWave/open-zwave/releases
   - Decompress it into a directory
-    - tar xvzf https://github.com/OpenZWave/open-zwave/archive/v1.4.tar.gz
+    - tar xvzf https://github.com/OpenZWave/open-zwave/archive/v1.5.tar.gz
   - Compile it
-    - cd open-zwave-1.4
+    - cd open-zwave-1.5
 	- make
 - Install Code::Blocks IDE
   - sudo apt-get install codeblocks
+- Launch Code::Blocks
+- Create new project
+- Select console application
+- The language of the console application is C++
+- Choose Project title (e.g. zwhome)
+- Choose folder to create project in (e.g. /home/pi/Documents/Codeblocks)
+- Use defaults for compiler to use and configurations to enable
+- Set project build options
+  - compiler settings
+    - defines
+      linux
+  - linker settings
+    - link libraries
+      /home/pi/Documents/open-zwave-1.5/libopenzwave.a
+      pthread
+      curl
+      hdate
+      udev
+  - Search directories
+    - compiler
+      /home/pi/Documents/openzwave-1.5/cpp/src
+      /home/pi/Documents/openzwave-1.5/cpp/src/platform
+      /home/pi/Documents/openzwave-1.5/cpp/src/value_classes
+    - linker
+      /usr/lib/arm-linux-gnueabihf
 - Import zwhome source code, located at https://github.com/obzerving/zwhome, into codeblocks
-- Add path to open-zwave library (e.g. /home/pi/Documents/open-zwave-1.4/cpp/build) into codeblocks
-- Add references to libraries (libudev-dev, libcurl4-openssl-dev, libhdate-dev, and libopenzwave.so) into codeblocks
-- Edit zwDevices.cpp for path to open-zwave-1.4/config
+- Edit zwDevices.cpp for path to open-zwave-1.5/config
 - Compile and build zwhome
 - Make a directory to put zwhome executable
   - mkdir /home/pi/zwhome
 - Copy executable from /home/pi/Documents/Codeblocks/zwhome/bin/Debug to /home/pi/zwhome
   - cd /home/pi/zwhome
   - cp /home/pi/Documents/Codeblocks/zwhome/bin/Debug/zwhome .
-- Download sample zwhome configuration file, located at ?/zwconfig.txt, into /home/pi/zwhome and modify it accordingly (Note: zwhome must be restarted everytime the configuration file is changed).
-- Download sample zwhome rules file, located at ?/rulesfile.txt, into /home/pi/zwhome and modify accordingly (Note: zwhome must be restarted everytime the rules file is changed).
 - Use z-wave controller to add z-wave devices to z-wave network (see http://aeotec.com/z-wave-usb-stick/913-z-stick-manual-instructions.html)
-- Run MinOZW program to get parameters of z-wave devices
-  - /home/pi/Documents/open-zwave-1.4/MinOZW
-- Define z-wave home-ID and devices in zwhome configuration file
-- Run zwhome (This will execute the rules file automatically) and add it to /etc/rc.local to have it start after a reboot
+- Run prequel. It will identify the z-wave devices in the network and ask you to provide a name and location for each one.
+- Download sample zwhome configuration file, located at https://github.com/obzerving/zwhome/blob/master/configuration/zwconfig.txt, into /home/pi/zwhome and modify it accordingly (Note: zwhome must be restarted everytime the configuration file is changed).
+- Download sample zwhome rules file, located at https://github.com/obzerving/zwhome/blob/master/configuration/rulesfile.txt, into /home/pi/zwhome and modify accordingly (Note: zwhome must be restarted everytime the rules file is changed).
+  - You will reference devices in the rules file by the location and name you specified for them in prequel. for example, if you gave a device the name "crock-pot" and said its location was "kitchen", you would refer to it as kitchen.crock-pot.
+- Run zwhome (This will execute the rules file automatically) and add the following line to /etc/rc.local to have it start after a reboot
   /home/pi/zwhome/zwhome /home/pi/zwhome/zwconfig.txt &
-- Try the RESTful service! (for example, your pi's IP address is 192.168.1.2 and you have a light in the kitchen connected to a z-wave switch)
-  - http://192.168.1.2:8000/devices/switches/kitchen-light?state=on
-  - http://192.168.1.2:8000/devices/switches/kitchen-light?state=off
+- Try the RESTful service! (for example, if your pi's IP address is 192.168.1.2 and you have a chandelier (named "light") in the dining room (named "dining-room") connected to a z-wave switch)
+  - http://192.168.1.2:8000/devices/switches/kitchen.light?state=on
+  - http://192.168.1.2:8000/devices/switches/kitchen.light?state=off
 
 Amazon Echo Bridge Software Installation
-- Download a release of the software (latest version is 0.2.1 as of this writing) from https://github.com/armzilla/amazon-echo-ha-bridge/releases
-- Put it into a directory (for example)
-  - mkdir armzilla
-  - cp amazon-echo-bridge-0.2.1.jar armzilla
-- Run it (for example, your pi's IP address is 192.168.1.2 and you want the bridge to listen on port 8080) and add it to /etc/rc.local
-  - java -jar -Djava.net.preferIPv4Stack=true /home/pi/armzilla/amazon-echo-bridge-0.2.1.jar --upnp.config.address=192.168.1.2 --server.port=8080
-- Note: Wait at least five minutes for the software to complete its start up process!
-- Configure the bridge (Note: you will have problems getting to the configurator page from any computer other than the pi serving it)
-  - http://192.168.1.2:8080/configurator.html
-- Add all devices (for example)
+- Follow the directions at https://github.com/bwssytems/ha-bridge#automation-on-linux-systems, which is basically
+  - mkdir habridge
+  - cd habridge
+  - wget https://github.com/bwssytems/ha-bridge/releases/download/v4.5.6/ha-bridge-4.5.6.jar
+  - Include the System Control Setup on a pi (https://github.com/bwssytems/ha-bridge#system-control-setup-on-a-pi-preferred)
+  - ha-bridge should now be available at http://192.168.1.2:8080
+  - Go to that web page and add all devices (for example)
+NOTE: This is the minimum info needed to define the device. You can fill in other fields if desired.
   - Name: Kitchen Light
-  - On URL: http://192.168.1.2:8000/devices/switches/kitchen-light?state=on
-  - Off URL: http://192.168.1.2:8000/devices/switches/kitchen-light?state=off
+  - On items:
+    - Type: HTTP Device
+    - Target Item: http://192.168.1.2:8000/devices/kitchen.light?state=on
+    - Http Verb: GET
+    - Content Type: application/json
+  - Off items:
+    - Type: HTTP Device
+    - Target Item: http://192.168.1.2:8000/devices/kitchen.light?state=off
+    - Http Verb: GET
+    - Content Type: application/json
+NOTE: If the device is a dimmer switch, add this info to the device definition
+  - Dim items:
+    - Type: HTTP Device
+    - Target Item: http://192.168.1.2:8000/devices/kitchen.light?state=on&level=${intensity.percent}
+    - Http Verb: GET
+    - Content Type: application/json
 - Use Amazon Echo app to discover devices (or tell the Echo to "discover devices")
-- Try it! (for example, the Echo's wake word is "Alexa," so tell it "Alexa, turn on kitchen light")
+- Try it!
+  - The Echo's wake word is "Alexa," so tell it "Alexa, turn on kitchen light"
+  - If your switch is a dimmer, try "Alexa, turn on kitchen light to 40 percent"
 
 zdot Software Installation
 - Download the software, located at ?/zDot

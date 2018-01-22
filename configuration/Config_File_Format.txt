@@ -6,26 +6,51 @@ command_type parameter1 parameter2
 
 The recognized command_types and their associated parameters are:
 
-switch device_name zwave_device_info
+wifisensor sensor_name RESTuri|min_value|max_value|capabilities
 
-This is used for specifying on-off (switch-type) devices to zwHome. You give it a name that you can reference in the rules file. The zwave_device_info (nodeId|valueid.Genre|valueid.CommandClassId|valueid.Instance|valueid.Index|valueid.Type|Capabilities) is found by looking in the OZW_log.txt file. The Capabilities field is a number indicating whether the device is controlling lights and whether those lights are dimmable. It is determined this way:
+This is used for specifying a custom wifi sensor device. You give it a name you can reference in the rules file.
 
-If the device is controlling a light, add one. If the light is dimmable, add 2. So, a dimmable light has a capability of 3. A non-dimmable light has a capability of 1.
+There are two types of wifi sensors, which are distinguished by their RESTuri. If the RESTuri is simply the keyword "client," then it automatically reports its data to zwhome's server in the format
+http://zwhome:8000/sensors/<sensor_name>?param=<sensor_parameter>&value=<integer_value>
 
-sensor sensor_name zwave_device_info
+Otherwise, zwhome will periodically request a reading from the sensor by sending it a request of the format
+http://<sensor_ip/<sensor_parameter>
 
-This is used for specifying z-wave sensor devices. You give it a name you can reference in the rules file. The zwave_device_info (nodeId|valueid.Genre|valueid.CommandClassId|valueid.Instance|valueid.Index|valueid.Type) is found by looking in the OZW_log.txt file.
+The Capabilities field is a number indicating what type of sensor it is. The definitions are
+1  - Motion Sensor
+2  - Humidity Sensor
+4  - Temperature Sensor
+8  - Light Sensor
+16 - Can report its supply voltage
 
-wifisensor sensor_name wifi_device_info
 
-This is used for specifying a custom wifi sensor device. You give it a name you can reference in the rules file. The wifi_device_info (RESTuri|Capabilities). The Capabilities field is a number indicating what type of sensor it is. The definitions are
-1 - Motion Sensor
-2 - Humidity Sensor
-4 - Temperature Sensor
-8 - Light Sensor
+Example 1: For the OTALightSensor, whose IP address is 192.168.1.3, has a minimum value of 0 lux, a maximum value of 16000 lux, and sends reading upon request, the entry in zwconfig would be
+wifisensor kitchen.light-sensor http://192.168.1.3|0|16000|8
 
-For example, the OTALightSensor, whose IP address is 192.168.1.2, would be defined as
-wifisensor garden_light_sensor http://192.168.1.2/luminance|8
+Using the sensor in a rule:
+set|on|off kitchen.light from monday at 0800 to monday at sunset when kitchen.light-sensor_luminance < 2500
+
+Example 2: For a temperature sensor that has a minimum value of 12 deg F, a maximum value of 144 deg F, and sends periodic reports to zwhome, the entry in zwconfig would be
+wifisensor bedroom.temp-sensor client|12|144|4
+
+Using the sensor in a rule:
+set|on|off bedroom.fan_medium from friday at 0600 to friday at 1800 when bedroom.temp-sensor_temperature > 80
+
+wifiswitch switch_name RESTuri|capabilities
+
+This is used for specifying a custom wifi switch device. You give it a name you can reference in the rules file.
+
+The Capabilities field is a number indicating what type of switch it is. The definitions are
+16  - Can report its supply voltage
+32  - Can be dimmed, which implies that it is a multi-level switch; 0-99
+64  - Is a light switch, which implies that it is a binary switch; 0 or 99
+128 - Is a fan switch, which implies that it has three speeds; low, medium, and high
+
+Example: For a fanctrl switch, whose IP address is 192.168.1.4
+wifiswitch bedroom.fan http://192.168.1.4|128
+
+Using the switch in a rule:
+set|on|off bedroom.fan_low from tuesday at 1100 to tuesday at 1300
 
 days english sunday|monday|tuesday|wednesday|thursday|friday|saturday
 
@@ -59,12 +84,8 @@ define weekend saturday|sunday
 
 and place this rule in the rules file
 
-turn-on kitchen-light from weekend at 0900 to weekend at 1700
+turn|on|off kitchen-light from [weekend] at 0900 to [weekend] at 1700
 
 it will be the same as if you wrote the rule
 
-turn-on kitchen-light from saturday|sunday at 0900 to saturday|sunday at 1700
-
-***NOTE: There is a mandatory define needed by the program. The home ID of the controller must be specified as follows (in this example, 0x12345678 is the home ID):
-
-define home-id 0x12345678
+turn|on|off kitchen-light from saturday|sunday at 0900 to saturday|sunday at 1700

@@ -26,37 +26,55 @@ int zwRules::run(zwPrefs *zwP, zwDevices *zwD)
 	if(getexecutemode())
 	{ // We're controlling the devices for real
 		if(!deviceinit)
-		{ // We have to init the device driver first
-			if(zwD->init()!=0)
-			{
-				return -600; // couldn't init devices
-			};
-			// Start out not getting any reports from sensors (Do we need to do anything for wifi sensors?)
-// TODO: fix this mess. We don't want to set config params multiple times for one node
+		{
+			// Start out getting reports every minute
 			for(list<dvInfo>::iterator idv = srl.begin(); idv != srl.end(); idv++)
 			{
 				if((*idv).nodeId > 0)
-				{ // zwave device
-					Manager::Get()->SetConfigParam(zwD->g_homeId, (*idv).nodeId, 101, 0);
+				{ // zwave sensor ***Assumes AEOTEC multisenor)
+                    // Ask for humidity, temperature, luminance, and battery reports to be sent automatically to group 1
+                    Manager::Get()->SetConfigParam(zwD->g_homeId, (*idv).nodeId, 101, 225); // 11100001=1+32+64+128=225
+                    Manager::Get()->SetConfigParam(zwD->g_homeId, (*idv).nodeId, 111, 60);
+                    Manager::Get()->SetConfigParam(zwD->g_homeId, (*idv).nodeId, 4, 1); // Enable the motion sensor
 				}
 				else
-				{ // wifi device
-					(*idv).readinterval = 0;
+				{ // wifisensor
+					// Wifi sensors will be commanded to report every minute when they report in
 				}
 			}
+			// Get initial wifiswitch state
+			for(list<dvInfo>::iterator idv = dvl.begin(); idv != dvl.end(); idv++)
+			{ // find a wifiswitch in the list
+				if(!(*idv).restURL.empty())
+				{ // Found one
+                    char dvresp[128];
+                    string scmd ((*idv).restURL);
+                    scmd.append("/state"); // Ask for this variable to get current state of device
+                    if(zwD->sendWifiCmd((*idv).restURL, dvresp))
+                    {
+                        char *sensorv;
+                        sensorv = strtok(dvresp,"{\":}, ");
+                        sensorv = strtok(NULL,":, ");
+                        if(sensorv != NULL)
+                        {
+                            (*idv).reading.front().lastreading = atof(sensorv);
+                        }
+                    }
+                    else fprintf(zl, "Failed to get initial state from %s\n", (*idv).nodename.c_str());
+                }
+            }
 			deviceinit = true;
 		}
 	};
 	// start the main loop
 	bool running = true;
-//	bool useLastReading; // We use this flag to determine whether to use the last reading of a sensor
 	float svalue;
 	int iret = 0;
 	time_t rawtime;
 	struct tm *current;
 	time_t looptime;
 	int mincnt = 0; // This is the five minute counter
-	int simsensorcnt = 0; // This is used to simulate the sensor reporting every ten minutes
+	srand(time(NULL));
 	if(getexecutemode())
 	{ // starting time is the current time
 		time(&rawtime);
@@ -69,15 +87,47 @@ int zwRules::run(zwPrefs *zwP, zwDevices *zwD)
 
 	while(running)
 	{
+		if(zwDebug) fprintf(zl, "Time: %s\n",asctime(localtime(&rawtime)) ); fflush(zl);
+        bool result2;
+        for(list<dvInfo>::iterator it=srl.begin(); it!=srl.end(); it++)
+        {
+            if(getexecutemode())
+            {
+                if(zwDebug){fprintf(zl,"zwRules_run->getSensorValue\n"); fflush(zl);}
+                result2 = zwD->getSensorValue(&(*it), &svalue); // get a fresh reading every minute
+                if(zwDebug){fprintf(zl, "zwRules_run->getSensorValue returns %d\n",result2); fflush(zl);}
+            }
+            else
+            { // simulate readings with random points between min and max values
+                for(list<readInfo>::iterator ri = (*it).reading.begin(); ri != (*it).reading.end(); ri++)
+                {
+                    float fvalue = (*ri).min + rand() % ((*ri).max - (*ri).min + 1);
+                    bool foundri = false;
+                    int dp = 0; // find the right slot to put this datapoint
+                    while(!foundri && (dp < 10))
+                    {
+                        if((*ri).points[dp] == -100)
+                        { // Here's an empty slot to put it
+                            (*ri).points[dp] = fvalue;
+                            dp++;
+                            foundri = true;
+                        }
+                        else dp++;
+                    }
+                    if(!foundri)
+                    { // No empty slots. Slide the data points
+                        for(int j=0; j<dp-1; j++)(*ri).points[j] = (*ri).points[j+1];
+                        (*ri).points[dp-1] = fvalue;
+                        foundri = true;
+                    }
+                    float summit = 0.0; // compute the average. dp tells us how many data points to use
+                    for(int j=0; j<dp; j++) summit = summit + (*ri).points[j];
+                    (*ri).lastreading = summit/dp;
+                }
+            }
+        }
 		if(strcmp(zwR->sys_stat, "on")==0)
 		{
-			list<dvInfo>::iterator idv = srl.begin();
-			while(idv != srl.end())
-			{ // clear the last reading of every sensor before going through the rule loop
-				(*idv).lastreading = -1.0;
-				idv++;
-			}
-			if(++simsensorcnt > 10) simsensorcnt = 1;
 			current = localtime(&rawtime );
 			datestruct currentds;
 			currentds.DateTime.push_back(*current);
@@ -86,6 +136,8 @@ int zwRules::run(zwPrefs *zwP, zwDevices *zwD)
 			currentds.TimeType.push_back(0);
 			looptime = rawtime + 60; // we want to go through this loop every minute
 			zwR->sys_pause = false;
+            if(!rulelist.empty()) // Skip rule processing if there are no rules.
+            {
 			for(list<zwRule>::iterator itr=rulelist.begin(); itr!=rulelist.end(); itr++)
 			{
 				bool process_rule;
@@ -228,22 +280,7 @@ int zwRules::run(zwPrefs *zwP, zwDevices *zwD)
 										{
 											uint8 usevalue = (*itr).sensorNode->in_use;
 											if(usevalue == 0)
-											{ // No other rule is using this sensor, so start it up
-												if(getexecutemode())
-												{
-													if((*itr).sensorNode->nodeId > 0)
-													{
-														// Ask for humidity, temperature, luminance, and battery reports to be sent automatically to group 1
-														Manager::Get()->SetConfigParam(zwD->g_homeId, (*itr).sensorNode->nodeId, 101, 225); // 11100001=1+32+64+128=225
-														Manager::Get()->SetConfigParam(zwD->g_homeId, (*itr).sensorNode->nodeId, 111, 600);  // Send the reports every 10 minutes
-														Manager::Get()->SetConfigParam(zwD->g_homeId, (*itr).sensorNode->nodeId, 4, 1); // Enable the motion sensor
-													}
-													else
-													{ // Set the time interval and timestamp for the wifi sensor
-														(*itr).sensorNode->readinterval = 600;
-														(*itr).sensorNode->nextread = time(NULL);
-													}
-												};
+											{ // No other rule is using this sensor, so get an immediate reading
 												(*itr).sensorNode->in_use = 1;
 											}
 											else (*itr).sensorNode->in_use = ++usevalue; // More than one rule using this sensor
@@ -252,8 +289,10 @@ int zwRules::run(zwPrefs *zwP, zwDevices *zwD)
 										{
 											// Do the actions
 											long iid = itemIDgen();
+                                            if(zwDebug){fprintf(zl,"Queue from-to item %ld\n", iid); fflush(zl);}
 											q_action((*itr).on_action, (*itr).fromEvent.Time[i], (*itr).device, (*itr).enforce_from, iid);
 											q_action((*itr).off_action, (*itr).toEvent.Time[i], (*itr).device, (*itr).enforce_to, iid);
+                                            if(zwDebug){fprintf(zl,"Queing complete\n"); fflush(zl);}
 										};
 										(*itr).firing = i; // Keep track of which clause in rule is firing
 									}
@@ -271,23 +310,6 @@ int zwRules::run(zwPrefs *zwP, zwDevices *zwD)
 										// Then Update the sensor's use
 										uint8 usevalue = (*itr).sensorNode->in_use;
 										if(usevalue > 0) (*itr).sensorNode->in_use = --usevalue;
-										if(usevalue == 0)
-										{ // No other rule using this sensor, so stop sending reports
-											if(getexecutemode())
-											{
-												if((*itr).sensorNode->nodeId > 0) // for zwave sensor
-												{
-													Manager::Get()->SetConfigParam(zwD->g_homeId, (*itr).sensorNode->nodeId, 101, 0);
-												}
-												else
-												{ // for wifi sensor
-													(*itr).sensorNode->readinterval = 0; // This stops the reports
-													(*itr).sensorNode->lastreading = -1.0; // This forces a new report. Here's why:
-													// If hours passed between the last reading before turning off reports, the
-													// reading might be totally inaccurate. Better to get an updated reading.
-												}
-											}
-										}
 									}
 									update(&((*itr).fromEvent), (*itr).firing);
 									update(&((*itr).toEvent), (*itr).firing);
@@ -302,111 +324,91 @@ int zwRules::run(zwPrefs *zwP, zwDevices *zwD)
 									case 3: // When
 									case 4: // Except-When
 										{
-											bool result = false;
-											if(getexecutemode())
-											{
-												result = zwD->getSensorValue((*itr).sensorNode, &svalue);
-												if(result) // We have a valid report
-												{
-													(*itr).sensorNode->lastreading = svalue;
-													// If we didn't do this, we would get a sensor report for one rule, but not for
-													// the other rules in the loop. Lastreading is -1.0 when we turn on the sensor
-													// until it issues its first report
-												}
-												else // Didn't get a report but...
-												{
-													if((*itr).sensorNode->lastreading > -1.0)
-													{ // We can use the last reading for the rest of the rules
-														svalue = (*itr).sensorNode->lastreading;
-														result = true;
-													}
-												}
-											}
-											else // We're simulating the sensor
-											{
-												if(simsensorcnt == 10)
-												{
-													if(svalue < 0.0) svalue = (float)(rand() % 2000);
-													result = true;
-												}
-												else
-												{
-													result = false;
-												}
-											}
-											if(result)
-											{
-												if(opeval(svalue, (*itr).sensorOp, (*itr).sensorValue))
-												{ // Met the condition
-													if((*itr).conditionType == 3)
-													{ // For a WHEN condition, turn on the device(s)
-														q_action((*itr).on_action, currentds.Time[0], (*itr).device, (*itr).enforce_from, itemIDgen());
-														if(getexecutemode())
-														{
-															if((*itr).sensorNode->nodeId > 0) // for zwave sensor
-																Manager::Get()->SetConfigParam(zwD->g_homeId, (*itr).sensorNode->nodeId, 111, 1800);  // Send the reports every 30 minutes
-															else // for wifi sensor
-															{
-																(*itr).sensorNode->readinterval = 1800;
-																struct tm * tp = localtime(&rawtime);
-																tp->tm_sec += (*itr).sensorNode->readinterval;
-																(*itr).sensorNode->nextread = mktime(tp);
-															}
-														}
-													}
-													else
-													{ // For an EXCEPT-WHEN condition, turn off the device(s)
-														q_action((*itr).off_action, currentds.Time[0], (*itr).device, (*itr).enforce_to, itemIDgen());
-														if(getexecutemode())
-														{
-															if((*itr).sensorNode->nodeId > 0) // for zwave sensor
-																Manager::Get()->SetConfigParam(zwD->g_homeId, (*itr).sensorNode->nodeId, 111, 600);  // Send the reports every 10 minutes
-															else // for wifi sensor
-															{
-																(*itr).sensorNode->readinterval = 600;
-																struct tm * tp = localtime(&rawtime);
-																tp->tm_sec += (*itr).sensorNode->readinterval;
-																(*itr).sensorNode->nextread = mktime(tp);
-															}
-														}
-													}
-												}
-												else
-												{ // Didn't meet the condition
-													if((*itr).conditionType == 4)
-													{ // For an EXCEPT-WHEN condition, turn on the device(s)
-														q_action((*itr).on_action, currentds.Time[0], (*itr).device, (*itr).enforce_from, itemIDgen());
-														if(getexecutemode())
-														{
-															if((*itr).sensorNode->nodeId > 0) // for zwave sensor
-																Manager::Get()->SetConfigParam(zwD->g_homeId, (*itr).sensorNode->nodeId, 111, 1800);  // Send the reports every 30 minutes
-															else // for wifi sensor
-															{
-																(*itr).sensorNode->readinterval = 1800;
-																struct tm * tp = localtime(&rawtime);
-																tp->tm_sec += (*itr).sensorNode->readinterval;
-																(*itr).sensorNode->nextread = mktime(tp);
-															}
-														}
-													}
-													else
-													{ // For a WHEN condition, turn off the device(s)
-														q_action((*itr).off_action, currentds.Time[0], (*itr).device, (*itr).enforce_to, itemIDgen());
-														if(getexecutemode())
-														{
-															if((*itr).sensorNode->nodeId > 0) // for zwave sensor
-																Manager::Get()->SetConfigParam(zwD->g_homeId, (*itr).sensorNode->nodeId, 111, 600);  // Send the reports every 10 minutes
-															else // for wifi sensor
-															{
-																(*itr).sensorNode->readinterval = 600;
-																struct tm * tp = localtime(&rawtime);
-																tp->tm_sec += (*itr).sensorNode->readinterval;
-																(*itr).sensorNode->nextread = mktime(tp);
-															}
-														}
-													}
-												}
-											}
+                                            bool idone = false; // True when svalue loaded with last sensor reading
+											list<readInfo>::iterator ri = (*itr).sensorNode->reading.begin();
+                                            if(((*itr).readinterval > 0) && (rawtime > (*itr).nextread)) // Time to get next reading?
+                                            { // Yes. Find the right dataset (might be a multisensor)
+                                                while((ri != (*itr).sensorNode->reading.end()) && !idone)
+                                                {
+                                                    if((*ri).typeindex == (*itr).sensorIndex)
+                                                    { // Found the right dataset
+                                                        svalue = (*ri).lastreading;
+                                                        current->tm_sec += (*itr).readinterval;
+                                                        (*itr).nextread = mktime(current);
+                                                        idone = true;
+                                                    }
+                                                    else ri++;
+                                                }
+                                                if(idone)
+                                                { // Found the dataset
+                                                    if(svalue != -100.0)
+                                                    { // We have a valid reading
+                                                        if(!getexecutemode()) fprintf(zl, "Sensor %s reading: %.2f\n", (*itr).sensorNode->nodename.c_str(), svalue);
+												        if(opeval(svalue, (*itr).sensorOp, (*itr).sensorValue))
+												        { // Met the condition
+													        if((*itr).conditionType == 3)
+													        { // For a WHEN condition, turn on the device(s)
+														        q_action((*itr).on_action, currentds.Time[0], (*itr).device, (*itr).enforce_from, itemIDgen());
+                                                                (*itr).readinterval = 1800;
+                                                                struct tm * tp = localtime(&rawtime);
+                                                                tp->tm_sec += (*itr).readinterval;
+                                                                (*itr).nextread = mktime(tp);
+													        }
+													        else
+													        { // For an EXCEPT-WHEN condition, turn off the device(s)
+														        q_action((*itr).off_action, currentds.Time[0], (*itr).device, (*itr).enforce_to, itemIDgen());
+                                                                (*itr).readinterval = 600;
+                                                                struct tm * tp = localtime(&rawtime);
+                                                                tp->tm_sec += (*itr).readinterval;
+                                                                (*itr).nextread = mktime(tp);
+													        }
+												        }
+												        else
+												        { // Didn't meet the condition
+													        if((*itr).conditionType == 4)
+													        { // For an EXCEPT-WHEN condition, turn on the device(s)
+														        q_action((*itr).on_action, currentds.Time[0], (*itr).device, (*itr).enforce_from, itemIDgen());
+                                                                (*itr).readinterval = 1800;
+                                                                struct tm * tp = localtime(&rawtime);
+                                                                tp->tm_sec += (*itr).readinterval;
+                                                                (*itr).nextread = mktime(tp);
+													        }
+													        else
+													        { // For a WHEN condition, turn off the device(s)
+														        q_action((*itr).off_action, currentds.Time[0], (*itr).device, (*itr).enforce_to, itemIDgen());
+                                                                (*itr).readinterval = 600;
+                                                                struct tm * tp = localtime(&rawtime);
+                                                                tp->tm_sec += (*itr).readinterval;
+                                                                (*itr).nextread = mktime(tp);
+													        }
+												        }
+                                                    }
+                                                    else
+                                                    { // Either the sensor hasn't reported in yet or it's dead. Here's how we handle it.
+                                                        if((*itr).conditionType == 4)
+                                                        { // For an EXCEPT-WHEN condition, turn on the device(s)
+                                                            q_action((*itr).on_action, currentds.Time[0], (*itr).device, (*itr).enforce_from, itemIDgen());
+                                                            (*itr).readinterval = 1800;
+                                                            struct tm * tp = localtime(&rawtime);
+                                                            tp->tm_sec += (*itr).readinterval;
+                                                            (*itr).nextread = mktime(tp);
+                                                        }
+                                                        else
+                                                        { // For a WHEN condition, turn off the device(s)
+                                                            q_action((*itr).off_action, currentds.Time[0], (*itr).device, (*itr).enforce_to, itemIDgen());
+                                                            (*itr).readinterval = 600;
+                                                            struct tm * tp = localtime(&rawtime);
+                                                            tp->tm_sec += (*itr).readinterval;
+                                                            (*itr).nextread = mktime(tp);
+                                                        }
+
+                                                    }
+                                                }
+                                                else
+                                                { // didn't find the dataset
+                                                    fprintf(zl, "Did not find dataset index %d for sensor %s. Ignoring rule\n%s\n",(*itr).sensorIndex,(*itr).sensorNode->nodename.c_str(),(*itr).ruletext.c_str());
+                                                }
+                                            }
 											break;
 										}
 									default:
@@ -442,7 +444,8 @@ int zwRules::run(zwPrefs *zwP, zwDevices *zwD)
 						break;
 					} // switch
 				}
-			}; // for iterator
+			} // for iterator
+			}; // if empty rulelist
 			if(!q_list.empty())
 			{
 				int popcnt = 0;
@@ -452,58 +455,45 @@ int zwRules::run(zwPrefs *zwP, zwDevices *zwD)
 					{
 						if(getexecutemode())
 						{
-							if(itq->action > 99)
-							{ // We leave the device in its current state and just turn off enforcement
-								for(vector<dvInfo>::iterator ni = itq->dv.begin(); ni != itq->dv.end(); ni++)
-								{ // For each device
-									list<NodeInfo*>::iterator it = zwD->g_nodes.begin();
-									while (it != zwD->g_nodes.end())
-									{ // find it in the node list
-										NodeInfo* nodeInfo = *it;
-										if((*it)->m_nodeId == (*ni).nodeId)
-										{ // Found the device
-											list<ValueID>::iterator itv = nodeInfo->m_values.begin();
-											list<valInfo>::iterator ivv = nodeInfo->v_info.begin();
-											while (itv != nodeInfo->m_values.end())
-											{ // check each value in the device for the one that changes its state
-												if((*itv) == (*ni).vId.front())
-												{
-													(*ivv).enforce = false; // Turn off enforcement
-													fprintf(zl, "Remove enforcement: Node = %s\n", ((*ni).nodename).c_str()); fflush(zl);
-												}
-												ivv++;
-												itv++;
-											}
-										}
-										it++;
-									}
-								}
-							}
-							else
-								if(zwD->doAction(itq->action, zwD->g_homeId, (vector<dvInfo>) itq->dv, itq->enforce) != 0)
-								{
-									zwD->wrapup();
-									return -170;
-								}
+                            if(zwD->doAction(itq->action, itq->dv, itq->enforce) != 0)
+                            {
+                                zwD->wrapup();
+                                return -170;
+                            }
 						}
 						else // simulate it
 						{
 							string tstrz(asctime(&currentds.DateTime.back()));
 							tstrz.resize(tstrz.length() -1);
-							if(itq->action > 99)
-							{
-								fprintf(zl, "%s: Removing enforcement from Node(s)", tstrz.c_str());
-								for(vector<dvInfo>::iterator ni = itq->dv.begin(); ni != itq->dv.end(); ni++)
-								{
-									fprintf(zl, " %s\n",(*ni).nodename.c_str()); fflush(zl);
-									itq->enforce = false;
-								}
-							}
-							else
-							{
-								fprintf(zl, "%s: Do action %d on Node(s)", tstrz.c_str(), itq->action);
-								for(vector<dvInfo>::iterator ni = itq->dv.begin(); ni != itq->dv.end(); ni++) fprintf(zl, " %s",(*ni).nodename.c_str());
-								fprintf(zl, "%s\n", itq->enforce?" and enforce it.\n":".\n"); fflush(zl);
+                            for(list<string>::iterator sni = itq->dv.begin(); sni != itq->dv.end(); sni++)
+                            {
+                                for(list<dvInfo>::iterator ni = dvl.begin(); ni != dvl.end(); ni++)
+                                {
+                                    if((*sni) == (*ni).nodename)
+                                    {
+                                        if((itq->action > 99) && (itq->action < 255))
+                                        {
+                                            fprintf(zl, "%s: Remove enforcement from Node %s\n", tstrz.c_str(), (*sni).c_str());
+                                            (*ni).enforce = false;
+                                        }
+                                        else
+                                        {
+                                            if(itq->action != ((int) (*ni).reading.front().lastreading))
+                                            {
+                                                fprintf(zl, "%s: Turn %s %s%s", tstrz.c_str(), (itq->action==0)?"off":"on",(*ni).nodename.c_str(), itq->enforce?" and enforce it.\n":".\n");
+                                            }
+                                            else
+                                            {
+                                                fprintf(zl, "%s: %s already %s%s", tstrz.c_str(), (*ni).nodename.c_str(), (itq->action==0)?"off":"on", itq->enforce?" and being enforced.\n":".\n");
+                                            }
+                                            fflush(zl);
+                                            (*ni).desired_state = itq->action;
+                                            (*ni).reading.front().lastreading = float(itq->action);
+                                            (*ni).desired_state_timestamp = rawtime;
+                                            (*ni).enforce = itq->enforce;
+                                        }
+                                    }
+                                }
 							}
 						};
 						popcnt++;
@@ -519,19 +509,13 @@ int zwRules::run(zwPrefs *zwP, zwDevices *zwD)
 			{
 				if(getexecutemode())
 				{
-
-#ifdef WIN32
-					Sleep(1000);
-#endif
-#ifdef linux
 					sleep(1);
-#endif
 					time(&rawtime);
 				} // if getexecutemode
 				else
 				{
 					rawtime = looptime;
-					if(rawtime >= getsimendtime())
+                    if(rawtime >= getsimendtime())
 					{
 						return 0; // end of simulation
 					}
@@ -542,44 +526,84 @@ int zwRules::run(zwPrefs *zwP, zwDevices *zwD)
 			{ // Yes. Check nodes for enforced states
 				for(list<dvInfo>::iterator idv = dvl.begin(); idv != dvl.end(); idv++)
 				{ // for each device
-					list<NodeInfo*>::iterator it = zwD->g_nodes.begin();
-					while (it != zwD->g_nodes.end())
-					{ // find it in the node list
-						NodeInfo* nodeInfo = *it;
-						list<ValueID>::iterator itv = nodeInfo->m_values.begin();
-						list<valInfo>::iterator ivv = nodeInfo->v_info.begin();
-						while (itv != nodeInfo->m_values.end())
-						{ // check each value in the device for the one that changes its state
-							if((*itv) == (*idv).vId.front())
-							{
-								Manager::Get()->RefreshValue((*itv)); // Refresh value from network
-								if((*ivv).enforce)
-								{
-									if((*ivv).desired_state_timestamp < time(NULL))
-									{
-										vector<dvInfo> dvnode;
-										dvnode.push_back(*idv);
-										if(getexecutemode())
-										{
-											zwD->doAction((*ivv).desired_state, nodeInfo->m_homeId, dvnode, true);
-										}
-										else
-										{
-											string tstrz(asctime(&currentds.DateTime.back()));
-											tstrz.resize(tstrz.length() -1);
-											fprintf(zl, "\n%s: Enforcing action %d on %s\n", tstrz.c_str(), (*ivv).desired_state,(*idv).nodename.c_str()); fflush(zl);
-										}
+                    if((*idv).nodeId > 0)
+                    {
+                        if(((*idv).bccmap == 37) || ((*idv).bccmap == 38)) // We only care about switches and dimmers for now
+                        {
+                            if(getexecutemode())
+                            {
+                                bool foundgn = false;
+                                pthread_mutex_lock( &(zwD->g_criticalSection) );
+                                list<NodeInfo*>::iterator it = zwD->g_nodes.begin();
+                                while ((it != zwD->g_nodes.end()) && !foundgn)
+                                { // find it in the node list
+                                    NodeInfo* nodeInfo = *it;
+                                    if( ( nodeInfo->m_homeId == zwD->g_homeId ) && ( nodeInfo->m_nodeId == (*idv).nodeId ) )
+                                    { // this is the node. Find the right value
+                                        foundgn = true;
+                                        bool foundv = false;
+                                        list<ValueID>::iterator itv = nodeInfo->m_values.begin();
+                                        while ((itv != nodeInfo->m_values.end()) && !foundv)
+                                        { // check each value in the device for the one that changes its state
+                                            if((*itv).GetCommandClassId() == (*idv).bccmap)
+                                            {
+                                                foundv = true; // There should only be one value for this CC, so it must be the right one (right?)
+                                                Manager::Get()->RefreshValue((*itv)); // Refresh value from network
+                                                if((*idv).enforce)
+                                                {
+                                                    if((*idv).desired_state_timestamp < rawtime)
+                                                    {
+                                                        list<string> dvnode;
+                                                        dvnode.push_back((*idv).nodename);
+                                                        zwD->doAction((*idv).desired_state, dvnode, true);
+                                                    }
+                                                } // (*idv).enforce
+                                            }
+                                            itv++;
+                                        }
+                                        if(!foundv) fprintf(zl, "Did not find the right command class for this node\n");
+                                    }
+                                    it++;
+                                }
+                                pthread_mutex_unlock( &(zwD->g_criticalSection) );
+                                if(!foundgn) fprintf(zl, "Node not found in g_nodes\n");
+                            }
+                            else
+                            { // Simulating
+                                if((*idv).enforce)
+                                {
+                                    if((*idv).desired_state_timestamp < rawtime)
+                                    {
+                                        string tstrz(asctime(&currentds.DateTime.back()));
+                                        tstrz.resize(tstrz.length() -1);
+                                    }
+                                }
+                            }
+                        } // bccmap = 37 or 38
+                    }
+                    else
+                    { // This is a wifi device
+                        if((*idv).enforce)
+                        {
+                            if((*idv).desired_state_timestamp < rawtime)
+                            {
+                                list<string> dvnode;
+                                dvnode.push_back((*idv).nodename);
+                                if(getexecutemode())
+                                {
+                                    zwD->doAction((*idv).desired_state, dvnode, true);
+                                }
+                                else
+                                {
+                                    string tstrz(asctime(&currentds.DateTime.back()));
+                                    tstrz.resize(tstrz.length() -1);
+                                }
 
-									}
-								} // (*ivv).enforce
-							}
-							itv++;
-							ivv++;
-						}
-						it++;
-					}
+                            }
+                        } // (*idv).enforce
+                    }
 				} // for...
-			mincnt = 0;
+                mincnt = 0;
 			} // if(++mincnt...
 		} // if(sys_stat = on)
 		else
@@ -595,3 +619,4 @@ int zwRules::run(zwPrefs *zwP, zwDevices *zwD)
 	}; // while running
 	return(iret);
 };
+

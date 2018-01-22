@@ -14,41 +14,43 @@ Rule file formats
 6. <Action> <device|devicelist> ON|ON! <date|datelist> AT <time|timelist>  WHEN|EXCEPT-WHEN <sensor> <|=|> <sensor value>
 
 where
-<Action> can be either "turn-on" or "turn-off" (no quotes)
-<device|devicelist> can be either a single switch-type device (e.g. chandelier) or list of devices (e.g. chandelier|deck-light)
+<Action> is of the form set|<on_action>|<off_action>
+<on_action> can be a number from 0 to 99, where 0 is off and 99 is the highest power level. You can also use the keyword "on" to represent 99 and the keyword "off" to represent 0.
+<off_action> can be a number from 0 to 99, where 0 is off and 99 is the highest power level. You can also use the keyword "on" to represent 99 and the keyword "off" to represent 0.
+<device|devicelist> can be either a single switch-type device (e.g. dining-room.chandelier) or list of devices (e.g. dining-room.chandelier|deck.light). The format of a device name is location.name
 <date|datelist> can be either a single date (e.g. 1-jan) or a list of dates (e.g 1-jan|20-feb|monday)
 <time|timelist> can be an absolute 24-hour time (e.g. 2300), relative to sunrise (e.g. sunrise+10 means 10 minutes after sunrise) or relative to sunset (e.g. sunset-90 means 90 minutes before sunset).
 
 Example rules:
-# Turn on the crockpot every friday at 10am and turn it off on saturday at 1PM
-turn-on crockpot from friday at 1000 to saturday at 1300
+# Turn on the kitchen.crock-pot every friday at 10am and turn it off on saturday at 1PM
+set|on|off kitchen.crock-pot from friday at 1000 to saturday at 1300
 
-# turn-on the chandelier 90 minutes before sunset on the next occurance of january 25 (including today if today is 25-jan) and turn it off the next sunday at midnight
-turn-on chandelier from 25-jan at sunset-90 to sunday at 0000
+# turn on the dining-room.chandelier to 40 percent brightness 90 minutes before sunset on the next occurance of january 25 (including today if today is 25-jan) and turn it off the next sunday at midnight
+set|40|0 dining-room.chandelier from 25-jan at sunset-90 to sunday at 0000
 
 # turn-off the kitchen light on saturday and sunday from sunrise to sunset
 # The from! keyword ensures that, while the time is between the FROM and TO dates/times, even if someone turns on the light manually, it will go off again within five minutes
 # The to! keyword ensures that after the TO date/time, even if someone turns off the light after sunset, it will come back on again after five minutes
-turn-off kitchen-light from! saturday|sunday at sunrise to! saturday|sunday at sunset
+set|off|on kitchen.light from! saturday|sunday at sunrise to! saturday|sunday at sunset
 
 # The to@ keyword is like the to! keyword, but instead of the device changing state when the TO date/time is reached, the system just stops enforcing the device's current state.
 # So, the following rule works like the previous one except that the light can be turned off after sunset and it won't come back on again.
-turn-off kitchen-light from! saturday|sunday at sunrise to@ saturday|sunday at sunset
+set|off|on kitchen.light from! saturday|sunday at sunrise to@ saturday|sunday at sunset
 
-# turn on the chandelier and kitchen light every saturday from 9PM to 11PM unless it's January 1 or December 25
-turn-on chandelier|kitchen-light from saturday at 2100 to saturday at 2300 except-if from 1-jan|25-dec at 0000 to 1-jan|25-dec at 2359
+# turn on the dining-room.chandelier and kitchen light every saturday from 9PM to 11PM unless it's January 1 or December 25
+set|on|off dining-room.chandelier|kitchen-light from saturday at 2100 to saturday at 2300 except-if from 1-jan|25-dec at 0000 to 1-jan|25-dec at 2359
 # alternate way of writing this rule
-turn-on chandelier|kitchen-light from saturday at 2100 to saturday at 2300 except-if from 1-jan|25-dec to 1-jan|25-dec
+set|on|off dining-room.chandelier|kitchen-light from saturday at 2100 to saturday at 2300 except-if from 1-jan|25-dec to 1-jan|25-dec
 # yet another alternate way
-turn-on chandelier|kitchen-light from saturday at 2100 to saturday at 2300 except-if on 1-jan|25-dec
+set|on|off dining-room.chandelier|kitchen-light from saturday at 2100 to saturday at 2300 except-if on 1-jan|25-dec
 
-# turn on the chandelier every saturday from noon to 3PM if the light sensor reads less than 400 lux
+# turn on the dining-room.chandelier every saturday from noon to 3PM if the light sensor reads less than 400 lux
 # What really happens:	The program will check the sensor (every 10 minutes if the device is off; every 30 minutes if the device is on) between the hours of noon and 3PM on Saturday. On each check,
-#			If the sensor reads less than 400 lux, the chandelier will turn on (or stay on).
-#			If the sensor reads more than 400 lux, the chandelier will turn off (or stay off).
+#			If the sensor reads less than 400 lux, the dining-room.chandelier will turn on (or stay on).
+#			If the sensor reads more than 400 lux, the dining-room.chandelier will turn off (or stay off).
 # This means it's possible that you could have the light cycling on every 10 minutes and off every 30 minutes.
 # When the rule becomes inactive at 3PM, the device will remain in the same state as the last command it was given.
-turn-on chandelier from saturday at 1200 to saturday at 1500 when light-sensor < 400
+set|on|off dining-room.chandelier from saturday at 1200 to saturday at 1500 when light-sensor < 400
 
 Rule constraints
 1. The From-event-date may be any combination of date types

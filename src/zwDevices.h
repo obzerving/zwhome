@@ -23,21 +23,37 @@
 using namespace OpenZWave;
 using namespace std;
 
+    typedef struct
+    {
+        int typeindex;
+        int min;
+        int max;
+		float points[10]; // used by sensors
+		float lastreading; // used by sensors and wifi switches
+    } readInfo;
+
 	typedef struct
 	{
-		string nodename;
-		int nodeId;
-		list<ValueID> vId;
-		string restURL;
-		bool isLightSensor;
-		bool isTempSensor;
-		bool isHumiditySensor;
-		bool isMotionSensor;
-		bool isLight;
-		bool canDim;
-		int readinterval; // in seconds
-		time_t nextread;
-		float lastreading;
+		string nodename; // used by zwRules_ingest
+		int nodeId; // used by doAction, q_action, zwRules_ingest
+		uint8 bccmap; // command class mapped to Basic command class
+		string name; // device name
+		string location; // device location
+		string restURL; // used by wifi sensors and switches
+		bool isController; // designates a zwave controller
+        bool isFan; // Capability = 128
+		bool isLight; // Capability = 64
+		bool canDim; // Capability = 32
+		bool reportsBattery; // Capability = 16
+		bool isLightSensor; // Capability = 8
+		bool isTempSensor; // Capability = 4
+		bool isHumiditySensor; // Capability = 2
+		bool isMotionSensor; // Capability = 1
+		float voltage; // used by sensors and devices
+		list<readInfo> reading;
+		bool enforce;
+		uint8			desired_state;
+		time_t			desired_state_timestamp;
 		uint8 in_use; // for sensor nodes: number of currently firing rules using sensor
 	}dvInfo;
 
@@ -64,23 +80,37 @@ class zwDevices
 
 public:
 
-#ifdef WIN32
-	CRITICAL_SECTION g_criticalSection;
-#endif
-#ifdef linux
+/*
+enum  	SensorType {
+  SensorType_Temperature = 1, SensorType_General, SensorType_Luminance, SensorType_Power,
+  SensorType_RelativeHumidity, SensorType_Velocity, SensorType_Direction, SensorType_AtmosphericPressure,
+  SensorType_BarometricPressure, SensorType_SolarRadiation, SensorType_DewPoint, SensorType_RainRate,
+  SensorType_TideLevel, SensorType_Weight, SensorType_Voltage, SensorType_Current,
+  SensorType_CO2, SensorType_AirFlow, SensorType_TankCapacity, SensorType_Distance,
+  SensorType_AnglePosition, SensorType_Rotation, SensorType_WaterTemperature, SensorType_SoilTemperature,
+  SensorType_SeismicIntensity, SensorType_SeismicMagnitude, SensorType_Ultraviolet, SensorType_ElectricalResistivity,
+  SensorType_ElectricalConductivity, SensorType_Loudness, SensorType_Moisture, SensorType_MaxType
+};
+*/
+
+#define SENSOR_TYPE_CNT 6
+char SensorType[SENSOR_TYPE_CNT][20];
+
+char fanSpeeds[5][8];
+
 	static pthread_mutex_t g_criticalSection;
 	static pthread_cond_t initCond;
 	static pthread_mutex_t initMutex;
-#endif
 	uint32 g_homeId;
 	bool g_nodesQueried;
 	list<NodeInfo*> g_nodes;
-	int init();
+    bool sendWifiCmd(string wificmd, char *resp);
+	int init(bool executeflag);
 	void wrapup();
-	int doAction(int action, uint32 homeId, vector<dvInfo> nodeId, bool enforce);
-	int getNodetype(uint8 nodeId);
+//	int doAction(uint8 action, vector<dvInfo> nodeId, bool enforce);
+	int doAction(uint8 action, list<string> nodenames, bool enforce);
 	bool getSensorValue(dvInfo *dv, float *fvalue);
-	map<string, int> nodetypemap;
 };
 
 #endif /* ZWDEVICES_H_ */
+

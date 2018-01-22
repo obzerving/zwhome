@@ -35,30 +35,11 @@ public:
 		vector<time_t> Time; // list of FROM Event date/time in seconds
 	};
 
-	zwRules(); //constructor
-	~zwRules(); //destructor
-	bool opeval(float sensor_report, int sensor_op, float ref_value);
-	int init(class zwPrefs *zwP);
-	int ingest(zwPrefs *zwP); // parses rule, expands it, and stores result in zwRules. Returns 0=Okay or error code
-	void update(datestruct *newdate, int nindex); // updates part of the rule for the next event to trigger
-	int loadchkptfile(string chkptfilename); // load a checkpoint file into a rule list
-	int run(zwPrefs *zwP, zwDevices *zwD);
-	char sys_stat[8];
-	list<dvInfo> dvl;
-	time_t getsimstarttime();
-	time_t getsimendtime();
-	void setsimstarttime(time_t startdatetime);
-	void setsimendtime(time_t enddatetime);
-	void setexecutemode(bool modeflag);
-	bool getexecutemode();
-	string getdayname(int daynum);
-
-private:
-		typedef struct
+    typedef struct
 	{
-		int on_action; /* The action to perform on the device(s) when the rule fires */
-		int off_action; /* The action to perform on the device(s) when the rule goes inactive */
-		vector<dvInfo> device; /* node id */
+		uint8 on_action; /* The action to perform on the device(s) when the rule fires */
+		uint8 off_action; /* The action to perform on the device(s) when the rule goes inactive */
+		list<string> device; /* node name */
 		int eventDurationType; // 0=unknown; 1=FROM/TO 2=ON
 		datestruct fromEvent;
 		datestruct toEvent;
@@ -70,6 +51,8 @@ private:
 		int sensorIndex;
 		int sensorOp; // 0= “=”; 1= “<”; 2= “>”
 		float sensorValue;
+		int readinterval; // in seconds
+		time_t nextread;
 		int conditionDurationType; // 0=unknown; 1=FROM/TO 2=ON
 		int firing; /* contains the index of the event currently firing; otherwise = 0 */
 		bool enforce_from;
@@ -79,11 +62,32 @@ private:
 
 	list<zwRule> rulelist;
 
+	zwRules(); //constructor
+	~zwRules(); //destructor
+	bool opeval(float sensor_report, int sensor_op, float ref_value);
+	int init(class zwPrefs *zwP);
+	int ingest(zwPrefs *zwP); // parses rule, expands it, and stores result in zwRules. Returns 0=Okay or error code
+	void update(datestruct *newdate, int nindex); // updates part of the rule for the next event to trigger
+	int run(zwPrefs *zwP, zwDevices *zwD);
+	char sys_stat[8];
+	list<dvInfo> dvl;
+	list<dvInfo> srl;
+	time_t getsimstarttime();
+	time_t getsimendtime();
+	void setsimstarttime(time_t startdatetime);
+	void setsimendtime(time_t enddatetime);
+	void setexecutemode(bool modeflag);
+	bool getexecutemode();
+	string getdayname(int daynum);
+
+private:
+
 	typedef struct
 	{
-		int action;
+		uint8 action;
 		time_t acttime;
-		vector<dvInfo> dv;
+//		vector<dvInfo> dv;
+        list<string> dv;
 		bool enforce;
 		long itemID;
 	} q_item;
@@ -91,8 +95,6 @@ private:
 	float sval;
 	list<q_item> q_list;
 	ifstream rulefile;
-	map<string, int> actionmap;
-	map<string, int> revertmap;
 	map<string, int> conditionmap;
 	map<string, int> sensortypemap;
 	map<string, int> sensoropmap;
@@ -108,12 +110,13 @@ private:
 	double home_lat, home_long;
 	int home_tz;
 	bool sys_pause;
-	list<dvInfo> srl;
 	long itemIDgen();
 	int parsedate(string datestr, datestruct *ds);
 	int parsetime(vector<string> *timestr, datestruct *ds);
-	int q_action(int action, time_t acttime, vector<dvInfo> nodeId, bool enforce, long iid);
+//	int q_action(uint8 action, time_t acttime, vector<dvInfo> nodeId, bool enforce, long iid);
+	int q_action(uint8 action, time_t acttime, list<string> nodenames, bool enforce, long iid);
 	void printrule(zwRule *theRule);
 };
 
 #endif /* ZWRULES_H_ */
+

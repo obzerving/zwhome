@@ -1,0 +1,15 @@
+# Note: All z-wave devices were pre-defined by running the prequel program
+# All wifi devices are defined in the zwhome configuration file
+
+# Turn on the kitchen light every Monday from 30 minutes after sunset to 11 PM
+set|99|0 kitchen.light from monday at sunset+30 to monday at 2300
+
+# Turn on the crock pot from June 3 at 10 AM to June 3 at 6 PM
+set|99|0 kitchen.crock-pot from 3-jun at 1000 to 3-jun at 1800
+
+# On Saturday and Sunday, turn on the family room light and the living room light from sunset to 11:35 PM
+set|99|0 family-room.light|living-room.light from saturday|sunday at sunset to saturday|sunday at 2335
+
+# On Saturday and Sunday, turn on the dining room light from 9 AM to 3 PM, but only if the outside light level is less than 1000 lux
+# (This rule assumes that you've defined weekend to be saturday|sunday in the configuration file)
+set|99|0 dining-room.light from [weekend] at 0900 to [weekend] at 1500 if front.sensor < 1000

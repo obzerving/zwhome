@@ -19,28 +19,22 @@ class zwPrefs
 {
 public:
 	int ingest(string configfile); //parses config file and stores results. Returns 0=okay or error code
-	bool chkptfile_exists(); // switch returns true= chkptfile exists or false= no chkptfile
 	string getrulefilename();
-	string getchkptfilename();
 	string getdefvalue(string lbl);
 	string getmonths(string monthtype);
 	string getdays(string daynames);
 	string getloc(string locname);
-	int getsensornode(string sensorname, dvInfo *dv);
-	int getdevlist(list<dvInfo> *dvl);
-	int getsensorlist(list<dvInfo> *srl);
-	int getwifisensorlist(list<dvInfo> *dvl);
-	zwPrefs();
+	string getsim();
+    bool readZWcfg(list<dvInfo> *dvl, list<dvInfo> *srl);
+    int getwifisensorlist(list<dvInfo> *dvl);
+    int getwifiswitchlist(list<dvInfo> *dvl);
+    zwPrefs();
 	~zwPrefs();
-	enum TypeField {SWITCH, SENSOR, DEFINE, FILE, MONTHS, DAYS, LOCATIONS, WIFISENSOR};
+	enum TypeField {DEFINE, FILE, MONTHS, DAYS, LOCATIONS, WIFISENSOR, WIFISWITCH, SIMULATE};
 private:
 	map<string, TypeField> typemap;
 	map<string, string> defmap;
-	// label everyday sunday|monday|tuesday|wednesday|thursday|friday|saturday
-	map<string, string> swmap;
-	// switch chandelier (nodeId|valueid.Genre|valueid.CommandClassId|valueid.Instance|valueid.Index|valueid.Type|{canDim||isLight}
-	map<string, string> sensormap;
-	// sensor front_light (nodeId|valueid.Genre|valueid.CommandClassId|valueid.Instance|valueid.Index|valueid.Type|{battery||motion_sensor||light_sensor||humidity_sensor||temp_sensor||switch}
+	// define everyday sunday|monday|tuesday|wednesday|thursday|friday|saturday
 	map<string, string> filemap;
 	// file rules rulefile.txt
 	map<string, string> monthmap;
@@ -50,10 +44,15 @@ private:
 	// days gregorian sunday|monday|tuesday|wednesday|thursday|friday|saturday
 	map<string, string> locmap; // latitude|longitude of home location
 	map<string, string> wifisensormap;
-	// wifisensor front_light http://sensor_IP:Port/sensor|{battery||motion_sensor||light_sensor||humidity_sensor||temp_sensor||switch}
+	// wifisensor front_light http://sensor_IP:Port/sensor|{battery||light_sensor||humidity_sensor||temp_sensor||motion_sensor}
+	map<string, string> wifiswitchmap;
+	// wifiswitch bedroom_fan http://sensor_IP:Port/switch|{isLight||canDim||battery||light_sensor||humidity_sensor||temp_sensor||motion_sensor}
+	map<string, string> simmap;
+	// simulate from 1-jan at 0000 to 31-dec at 2359
 	ifstream cfgfile;
 	string rulefilename;
 	string chkptfilename;
 };
 
 #endif /* ZWPREFS_H_ */
+

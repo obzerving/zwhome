@@ -21,6 +21,8 @@ using namespace std;
 
 static long uuid;
 
+#define zwDebug 0
+
 zwRules::zwRules()
 {
 	home_lat = atof("39.3680556");
@@ -66,9 +68,9 @@ bool zwRules::opeval(float sensor_report, int sensor_op, float ref_value)
 void zwRules::printrule(zwRule *theRule)
 {
 	fprintf(zl, "\nRuletext: %s\n",(theRule->ruletext).c_str());
-	fprintf(zl,"action: ON = %d OFF = %d\n",theRule->on_action,theRule->off_action);
+	fprintf(zl,"action: ON = %u OFF = %u\n",theRule->on_action,theRule->off_action);
 	fprintf(zl,"node(s): ");
-	for(vector<dvInfo>::iterator i=theRule->device.begin(); i!=theRule->device.end();i++) fprintf(zl," %s",((*i).nodename).c_str());
+	for(list<string>::iterator i=theRule->device.begin(); i!=theRule->device.end();i++) fprintf(zl," %s",(*i).c_str());
 	fprintf(zl, "\n");
 	switch(theRule->eventDurationType)
 	{
@@ -338,12 +340,6 @@ int zwRules::parsedate(string datestr, datestruct *ds)
 
 int zwRules::init(class zwPrefs *zwP)
 {
-	actionmap["turn-off"] = 0;
-	actionmap["turn-on"] = 1;
-	revertmap["turn-off"] = 1;
-	revertmap["turn-on"] = 0;
-	actionmap["simulate"] = 10;
-	revertmap["simulate"] = 10;
 	conditionmap["if"] = 1;
 	conditionmap["except-if"] = 2;
 	conditionmap["when"] = 3;
@@ -410,15 +406,58 @@ int zwRules::init(class zwPrefs *zwP)
 			return -155;
 		}
 	};
-	if(zwP->getdevlist(&dvl) < 0)
-	{ // error
-		return -156;
+	if(!(zwP->getsim().empty()))
+	{
+		vector<string> simcmd;
+		if(makeList(zwP->getsim(), &simcmd) < 0)
+		{ // error
+			return -156;
+		}
+		datestruct ds;
+		int dt;
+		struct tm *tmdate;
+		time_t thistime;
+		time(&thistime);
+        tmdate = localtime(&thistime);
+		ds.Time.push_back(thistime);
+		ds.DateTime.push_back(*tmdate);
+        ds.DateType.push_back(0); // Don't know what it is yet
+		ds.HebDate.push_back(new Hdate());
+		ds.HebDate.back()->set_gdate(tmdate->tm_mday, tmdate->tm_mon+1, tmdate->tm_year+1900);
+		if((dt = parsedate(simcmd[0], &ds)) < 0)
+		{ // error
+			return -106; // unknown datetype
+		};
+		vector<string> vs1(1,simcmd[1]);
+		ds.RSoffset.push_back(0);
+		if((dt = parsetime(&vs1, &ds)) < 0)
+		{ // error
+			return -110; // bad time format
+		};
+		setsimstarttime(ds.Time[0]);
+		if((dt = parsedate(simcmd[2], &ds)) < 0)
+		{ // error
+			return -106; // unknown datetype
+		};
+		vector<string> vs2(1,simcmd[3]);
+		if((dt = parsetime(&vs2, &ds)) < 0)
+		{ // error
+			return -110; // bad time format
+		};
+		setsimendtime(ds.Time[0]);
+		setexecutemode(false);
+	    if(zwDebug) fprintf(zl,"This is a simulation\n");
 	}
-	if(zwP->getsensorlist(&srl) < 0)
-	{ // error
-		return -157;
-	}
+	else
+    {
+        setexecutemode(true);
+        if(zwDebug) fprintf(zl,"Preparing to execute\n");
+    }
 	if(zwP->getwifisensorlist(&srl) < 0)
+	{ // error
+		return -158;
+	}
+	if(zwP->getwifiswitchlist(&dvl) < 0)
 	{ // error
 		return -158;
 	}
@@ -432,7 +471,8 @@ zwRules::~zwRules()
 {
 };
 
-int zwRules::q_action(int action, time_t acttime, vector<dvInfo> dv, bool enforce, long itemID)
+//int zwRules::q_action(uint8 action, time_t acttime, vector<dvInfo> dv, bool enforce, long itemID)
+int zwRules::q_action(uint8 action, time_t acttime, list<string> dv, bool enforce, long itemID)
 {
 	// Place the action into a queue item
 	q_item qi;
@@ -481,13 +521,15 @@ int zwRules::q_action(int action, time_t acttime, vector<dvInfo> dv, bool enforc
 				// until we actually queue it. If we get down to zero nodes in an item, we’ll delete it entirely from the queue
 				// This is going to be tricky because everytime we delete a node that isn’t at the end of the dv vector,
 				// it will reposition the elements of the vector.
-				vector<dvInfo>::iterator idv = qi.dv.begin();
+//				vector<dvInfo>::iterator idv = qi.dv.begin();
+				list<string>::iterator idv = qi.dv.begin();
 				while(idv != qi.dv.end()) // compare each node in item to be queued...
 				{
-					vector<dvInfo>::iterator qdv = itq->dv.begin();
+//					vector<dvInfo>::iterator qdv = itq->dv.begin();
+					list<string>::iterator qdv = itq->dv.begin();
 					while(qdv != itq->dv.end()) // ...to each node in this queued item
 					{
-						if((*qdv).nodeId == (*idv).nodeId)
+						if((*qdv) == (*idv))
 						{ // delete the node from itq->dv
 							qdv = itq->dv.erase(qdv);
 						}
@@ -510,8 +552,6 @@ int zwRules::q_action(int action, time_t acttime, vector<dvInfo> dv, bool enforc
 	};
 	return 0;
 };
-
-int zwRules::loadchkptfile(string chkptfilename) {return 0;}; // NOT IMPLEMENTED YET
 
 time_t zwRules::getsimstarttime()
 {
@@ -539,3 +579,4 @@ bool zwRules::getexecutemode()
 {
 	return executeflag;
 };
+

@@ -1,18 +1,14 @@
-define home-id 0x01234567
-switch chandelier 5|1|37|1|0|0|1 # Node 5 is an example of a wall switch
-switch family-room-lamp 2|1|37|1|0|0|1 # Node 2 is an example of an appliance module
-switch deck-light 6|1|37|1|0|0|1
-switch crock-pot 4|1|37|1|0|0|0
-switch kitchen-light 3|1|37|1|0|0|1
-sensor front-temp-sensor 7|1|49|1|1|2|2 # Node 7 is an example of an Aeotec 3-in-1 sensor
-sensor front-humidity-sensor 7|1|49|1|5|2|4
-sensor front-sensor-battery 7|1|128|1|0|1|32
-wifisensor front-light-sensor http://esp_f48265/luminance|8
-wifisensor front-sensor-battery http://esp_f48265/voltage|32
-wifisensor back-light-sensor http://esp_f481a9/luminance|8
-wifisensor back-sensor-battery http://esp_f481a9/voltage|32
+#simulate run 11-oct|0001|14-oct|2359
+# If the hash tag is removed from the first line,
+# zwhome will log (but not actually perform) all the actions
+# it would have performed between 12:01 AM on October 11 through
+# 11:59 PM on October 14 of the current year. Otherwise, the first
+# line is just another comment in this file.
+wifisensor front.sensor http://esp8266_sensor_F|40
+wifisensor back.sensor http://esp8266_sensor_B|40
+wifiswitch bedroom.fan http://esp8266_switch_F|128
 Days English sunday|monday|tuesday|wednesday|thursday|friday|saturday
-FILE rules /home/pi/zwhome/rulefile.txt
+FILE rules /home/pi/rulefile.txt
 define erev-pesach 14-nissan
 define pesach-1 15-nissan
 define pesach-2 16-nissan
@@ -36,3 +32,4 @@ define simchas-torah 23-tishrei
 define erev-holidays 14-nissan|20-nissan|29-elul|9-tishrei|14-tishrei|21-tishrei|5-sivan
 define holidays 15-nissan|21-nissan|1-tishrei|15-tishrei|22-tishrei|6-sivan
 define last-day-holidays 16-nissan|22-nissan|2-tishrei|10-tishrei|16-tishrei|23-tishrei|7-sivan
+define everyday sunday|monday|tuesday|wednesday|thursday|friday|saturday

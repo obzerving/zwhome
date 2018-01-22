@@ -26,14 +26,15 @@ int zwRules::ingest(zwPrefs *zwP)
 	string kw;
 	// Open the rules file
 	rulefile.open(zwP->getrulefilename().c_str());
+	if(zwDebug) fprintf(zl, "Opened Rule file %s\n", zwP->getrulefilename().c_str());
 	list<string> tline;
 	zwRule *current_rule;	// For each rule
 	while (rulefile.good())
 	{
-	// Read it into a string
+        // Read it into a string
 		getline(rulefile, aline);
 		transform(aline.begin(), aline.end(), aline.begin(), ::tolower); // convert to lowercase
-	// Substitute labels in line
+        // Substitute labels in line
 		while((bstart = aline.find('['))!= (int) string::npos)
 		{ // found start of label
 			if((bend = aline.find(']'))== (int) string::npos)
@@ -44,6 +45,7 @@ int zwRules::ingest(zwPrefs *zwP)
 			aline.erase(bstart, bend-bstart+1); // delete the label
 			aline.insert(bstart, zwP->getdefvalue(kw)); // insert the corresponding value
 		};
+		if(zwDebug)fprintf(zl, "Processing rule: %s\n", aline.c_str());
 		// tokenize the line
 		Tokenizer atoken(aline);
 		while(atoken.NextToken())
@@ -56,6 +58,18 @@ int zwRules::ingest(zwPrefs *zwP)
 
 		while (!tline.empty())
 		{
+            if(zwDebug)fprintf(zl, "Parse state %d: Token = %s\n",parse_state, tline.front().c_str());
+            struct tm *tmdate;
+            time_t thistime;
+            if(getexecutemode())
+            {
+                time(&thistime); // start with today's date
+            }
+            else
+            {
+                thistime = getsimstarttime(); // start with beginning of simulation
+            };
+            tmdate = localtime(&thistime);
 			switch(parse_state)
 			{
 			case 0: // parse action or comment
@@ -66,9 +80,10 @@ int zwRules::ingest(zwPrefs *zwP)
 				}
 				else
 				{
-					if(actionmap.find(tline.front())==actionmap.end())
+					vector<string> actlist;
+					if((makeList(tline.front(), &actlist) < 0) || (actlist.size() != 3))
 					{ // error
-						return -101; // unknown action
+						return -101; // malformed action list
 					}
 					else
 					{  // store the action
@@ -77,8 +92,14 @@ int zwRules::ingest(zwPrefs *zwP)
 						current_rule->eventDurationType = 0;
 						current_rule->conditionDurationType = 0;
 						current_rule->conditionType = 0;
-						current_rule->on_action = actionmap.find(tline.front())->second;
-						current_rule->off_action = revertmap.find(tline.front())->second;
+						if(!strcmp(actlist[1].c_str(),"on")) current_rule->on_action = 99;
+						else  if(!strcmp(actlist[1].c_str(),"off")) current_rule->on_action = 0;
+							else if(is_number(actlist[1])) current_rule->on_action = atoi(actlist[1].c_str());
+								else return -1011; // Invalid on_action
+						if(!strcmp(actlist[2].c_str(),"on")) current_rule->off_action = 99;
+						else  if(!strcmp(actlist[2].c_str(),"off")) current_rule->off_action = 0;
+							else if(is_number(actlist[2])) current_rule->off_action = atoi(actlist[2].c_str());
+								else return -1012; // Invalid off_action
 						current_rule->firing = -1;
 						parse_state = 1;
 					}
@@ -95,13 +116,29 @@ int zwRules::ingest(zwPrefs *zwP)
 					{ // for each device in the rule
 						bool foundd = false;
 						list<dvInfo>::iterator idvl = dvl.begin();
-						if(idvl == dvl.end())fprintf(zl, "i=%d and idvl=dvl.end\n",i);
 						while((idvl != dvl.end()) && !foundd)
 						{ // See if the device is in the list
-							if(devlist[i] == (*idvl).nodename)
+                            // Is it a fully qualified switch name (e.g. bedroom.fan_low)?
+                            string cap;
+                            string dname;
+                            size_t foundi = devlist[i].find('_');
+                            if(foundi != std::string::npos)
+                            { // Yes
+                                cap = devlist[i].substr(foundi+1); // Here's the capability
+                                if((*idvl).isFan)
+                                {
+                                    for(int j=0; j<5;j++)
+                                    {
+                                        if(!strcmp(cap.c_str(), zwD->fanSpeeds[j])) current_rule->on_action = j;
+                                    }
+                                }
+                                dname = devlist[i].substr(0, foundi); // Here's the name that should be in the device list
+                            }
+                            else dname = devlist[i]; // No. Was just a regular device name
+							if(dname == (*idvl).nodename)
 							{ // found the device
-								current_rule->device.push_back(*idvl);
-								fprintf(zl, "%s = %016llX\n",idvl->nodename.c_str(), idvl->vId.front().GetId());
+//								current_rule->device.push_back(*idvl);
+								current_rule->device.push_back(dname);
 								foundd = true;
 							}
 							else idvl++;
@@ -143,20 +180,9 @@ int zwRules::ingest(zwPrefs *zwP)
 					{ // error
 						return -105; // malformed event list
 					};
-					struct tm *tmdate;
 					int datetype;
-					time_t thistime;
-					if(getexecutemode())
-					{
-						time(&thistime); // start with today's date
-					}
-					else
-					{
-						thistime = getsimstarttime(); // start with beginning of simulation
-					};
 					for(unsigned int i=0; i<datelist.size(); i++)
 					{
-						tmdate = localtime(&thistime);
 						current_rule->fromEvent.Time.push_back(thistime);
 						current_rule->fromEvent.DateTime.push_back(*tmdate);
 						current_rule->fromEvent.DateType.push_back(0); // Don't know what it is yet
@@ -251,7 +277,7 @@ int zwRules::ingest(zwPrefs *zwP)
 				if(!tline.front().compare("to@")) // @ is only valid for the end of events
 				{ // At the end of the event, instead of turning off the device, we just turn off enforcement
 					current_rule->enforce_to = true;
-					current_rule->off_action += 100;
+					if(current_rule->off_action < 155) current_rule->off_action += 100;
 					parse_state = 7;
 				}
 				if(parse_state == 6)
@@ -390,20 +416,9 @@ int zwRules::ingest(zwPrefs *zwP)
 					{ // error
 						return -105; // malformed event list
 					};
-					struct tm *tmdate;
 					int datetype;
-					time_t thistime;
-					if(getexecutemode())
-					{
-						time(&thistime); // start with today's date
-					}
-					else
-					{
-						thistime = getsimstarttime(); // start with beginning of simulation
-					};
 					for(unsigned int i=0; i<datelist.size(); i++)
 					{
-						tmdate = localtime(&thistime);
 						current_rule->fromCondition.DateTime.push_back(*tmdate);
 						current_rule->fromCondition.Time.push_back(thistime);
 						current_rule->fromCondition.DateType.push_back(0); // Don't know what it is yet
@@ -579,23 +594,42 @@ int zwRules::ingest(zwPrefs *zwP)
 					break;
 				}
 			case 20: // handle WHEN and EXCEPT-WHEN
-				{ // Get sensor specs
+				{
+                    // Check for fully qualified sensor name in rule (e.g. bedroom.window_temperature)
+                    size_t foundi = tline.front().find('_');
+                    if(foundi == std::string::npos)
+                    {
+                        return -120; // Not a fully qualified sensor name
+                    };
+                    string cap = tline.front().substr(foundi+1); // Here's the capability
+                    string sname = tline.front().substr(0, foundi); // Here's the name that should be in the sensor list
 					bool founds = false;
 					list<dvInfo>::iterator idv = srl.begin();
 					while((idv != srl.end()) && !founds)
 					{ // search the sensor list for it
-						if(tline.front() == (*idv).nodename)
+						if(sname == (*idv).nodename)
 						{ // found the sensor
-							current_rule->sensorNode = &(*idv);
-							founds = true;
+						// TODO: Need a more elegant way to check that the sensor has the capability called out by the rule
+                            current_rule->sensorIndex = -1;
+                            if(!strcmp(cap.c_str(), "temperature") && (*idv).isTempSensor) current_rule->sensorIndex = 1;
+                            if(!strcmp(cap.c_str(), "luminance") && (*idv).isLightSensor) current_rule->sensorIndex = 3;
+                            if(!strcmp(cap.c_str(), "relativehumidity") && (*idv).isHumiditySensor) current_rule->sensorIndex = 5;
+                            if(current_rule->sensorIndex == -1) return -120; // The sensor doesn't have the capability called out by the rule
+                            else
+                            {
+                                current_rule->sensorNode = &(*idv);
+                                current_rule->readinterval = 60;
+                                current_rule->nextread = thistime;
+                                founds = true;
+                            }
 						}
 						else idv++;
 					}
 					if(!founds)
 					{ // error
-						return -120; // unrecognized keyword;
+						return -121; // unrecognized keyword;
 					};
-					fprintf(zl, "%s = %016llX\n",(current_rule->sensorNode)->nodename.c_str(), (current_rule->sensorNode)->vId.front().GetId());
+					if(zwDebug) fprintf(zl, "%s\n",(current_rule->sensorNode)->nodename.c_str());
 					parse_state = 21;
 					break;
 				}
@@ -625,18 +659,8 @@ int zwRules::ingest(zwPrefs *zwP)
 					};
 					break;
 				}
-			case 80: // Is it a rule or a simulate directive?
-				if(current_rule->on_action == actionmap["simulate"])
-				{ // This is the simulate directive
-					setexecutemode(false);
-					setsimstarttime(current_rule->fromEvent.Time[0]);
-					setsimendtime(current_rule->toEvent.Time[0]);
-				}
-				else
-				{ // store the rule
-//					if(zwDebug) printrule(current_rule);
-					rulelist.push_back(*current_rule);
-				};
+			case 80: // Store the rule
+                rulelist.push_back(*current_rule);
 				parse_state = 100;
 				// reclaim storage before going on to the next rule
 				current_rule->ruletext.clear();
@@ -653,6 +677,7 @@ int zwRules::ingest(zwPrefs *zwP)
 	}; // while rulefile.good
 	rulefile.close();
 	fprintf(zl, "\nRulelist contains %d rules\n", rulelist.size()); fflush(zl);
-	for(list<zwRule>::iterator rl = rulelist.begin(); rl != rulelist.end(); rl++) printrule(&(*rl)); fflush(zl);
+	if(zwDebug) for(list<zwRule>::iterator rl = rulelist.begin(); rl != rulelist.end(); rl++) printrule(&(*rl)); fflush(zl);
 	return 0;
 };
+

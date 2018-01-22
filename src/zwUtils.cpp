@@ -30,7 +30,7 @@ bool is_number(const std::string& str)
 	unsigned int i;
 	for (i = 0; i < str.length(); i++)
 	{
-		if (!std::isdigit(str[i]) && str[i] != '.')
+		if (!std::isdigit(str[i]) && (str[i] != '.'))
 		{
 			return false;
 		}
@@ -50,3 +50,4 @@ void tmcopy(struct tm *tmsrc, struct tm *tmdest)
 	tmdest->tm_yday = tmsrc->tm_yday;
 	tmdest->tm_year = tmsrc->tm_year;
 };
+
