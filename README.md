@@ -10,7 +10,7 @@ This system is built around three major software components, which need to be co
   - Rules-based scheduling of device actions up to one year in advance
   - Recovery of device schedules and states after power failure
   - Support for immediate control of device actions through a restful service
-  - Web status page
+  - Web status page (e.g. http://zwhome.local:8000/status)
   - Software used
     - Open-zwave library, located at https://github.com/OpenZWave/open-zwave, for z-wave device support
     - Mongoose Embedded Web Server Library, located at https://github.com/cesanta/mongoose
