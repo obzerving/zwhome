@@ -16,7 +16,7 @@ This system is built around three major software components, which need to be co
     - Mongoose Embedded Web Server Library, located at https://github.com/cesanta/mongoose
     - Slam-clock, located at https://github.com/jwatte/slam-clock, for real-time clock module support
     - Code::Blocks IDE for editing, compiling, and linking the program
-    - prequel, located at https://github.com/obzerving/, for naming Z-wave devices. This software needs to be run once before the initial launch of zwhome. The program can be run whenever a new Z-Wave module is added.
+    - prequel, located at https://github.com/obzerving/prequel, for naming Z-wave devices. This software needs to be run once before the initial launch of zwhome. The program can be run whenever a new Z-Wave module is added.
   - Hardware used
     - Raspberry Pi 3 and suitable power supply (5 volts @ 2 amps)
     - Aeon Labs DSA02203-ZWUS Z-Wave Z-Stick Series 2 USB Dongle
