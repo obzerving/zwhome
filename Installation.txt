@@ -1,11 +1,11 @@
 zwhome Software Installation
 
-- Write Raspian Jessie operating system image to SD card (See https://www.raspberrypi.org/documentation/installation/installing-images/README.md)
-- Put SD card in Raspberry Pi, power it up, and configure it with raspi-config (See http://elinux.org/RPi_raspi-config)
+- Write Raspian Jessie operating system image to SD card (See https://www.raspberrypi.org/documentation/installation/installing-images/README.md )
+- Put SD card in Raspberry Pi, power it up, and configure it with raspi-config (See http://elinux.org/RPi_raspi-config )
 - Update the system with the following commands
   - sudo apt-get update
   - sudo apt-get upgrade
-- Install slam-clock per its README.md
+- Install real time clock. There are many sources of instruction, such as https://cdn-learn.adafruit.com/downloads/pdf/adding-a-real-time-clock-to-raspberry-pi.pdf
 - Install libraries
   - sudo apt-get install libudev-dev
   - sudo apt-get install libcurl4-openssl-dev
@@ -45,7 +45,7 @@ zwhome Software Installation
       /home/pi/Documents/openzwave-1.5/cpp/src/value_classes
     - linker
       /usr/lib/arm-linux-gnueabihf
-- Import zwhome source code, located at https://github.com/obzerving/zwhome, into codeblocks
+- Import zwhome source code, located at https://github.com/obzerving/zwhome into codeblocks
 - Edit zwDevices.cpp for path to open-zwave-1.5/config
 - Compile and build zwhome
 - Make a directory to put zwhome executable
@@ -53,10 +53,10 @@ zwhome Software Installation
 - Copy executable from /home/pi/Documents/Codeblocks/zwhome/bin/Debug to /home/pi/zwhome
   - cd /home/pi/zwhome
   - cp /home/pi/Documents/Codeblocks/zwhome/bin/Debug/zwhome .
-- Use z-wave controller to add z-wave devices to z-wave network (see http://aeotec.com/z-wave-usb-stick/913-z-stick-manual-instructions.html)
+- Use z-wave controller to add z-wave devices to z-wave network (see http://aeotec.com/z-wave-usb-stick/913-z-stick-manual-instructions.html )
 - Run prequel. It will identify the z-wave devices in the network and ask you to provide a name and location for each one.
-- Download sample zwhome configuration file, located at https://github.com/obzerving/zwhome/blob/master/configuration/zwconfig.txt, into /home/pi/zwhome and modify it accordingly (Note: zwhome must be restarted everytime the configuration file is changed).
-- Download sample zwhome rules file, located at https://github.com/obzerving/zwhome/blob/master/configuration/rulesfile.txt, into /home/pi/zwhome and modify accordingly (Note: zwhome must be restarted everytime the rules file is changed).
+- Download sample zwhome configuration file, located at https://github.com/obzerving/zwhome/blob/master/configuration/zwconfig.txt into /home/pi/zwhome and modify it accordingly (Note: zwhome must be restarted everytime the configuration file is changed).
+- Download sample zwhome rules file, located at https://github.com/obzerving/zwhome/blob/master/configuration/rulesfile.txt into /home/pi/zwhome and modify accordingly (Note: zwhome must be restarted everytime the rules file is changed).
   - You will reference devices in the rules file by the location and name you specified for them in prequel. for example, if you gave a device the name "crock-pot" and said its location was "kitchen", you would refer to it as kitchen.crock-pot.
 - Run zwhome (This will execute the rules file automatically) and add the following line to /etc/rc.local to have it start after a reboot
   /home/pi/zwhome/zwhome /home/pi/zwhome/zwconfig.txt &
@@ -65,11 +65,14 @@ zwhome Software Installation
   - http://192.168.1.2:8000/devices/switches/kitchen.light?state=off
 
 Amazon Echo Bridge Software Installation
-- Follow the directions at https://github.com/bwssytems/ha-bridge#automation-on-linux-systems, which is basically
+- Follow the directions at https://github.com/bwssytems/ha-bridge , which is basically
   - mkdir habridge
   - cd habridge
   - wget https://github.com/bwssytems/ha-bridge/releases/download/v4.5.6/ha-bridge-4.5.6.jar
-  - Include the System Control Setup on a pi (https://github.com/bwssytems/ha-bridge#system-control-setup-on-a-pi-preferred)
+  - Include the System Control Setup on a pi per https://github.com/bwssytems/ha-bridge#manual-installation-of-ha-bridge-and-setup-of-systemd-service EXCEPT when creating ha-bridge.service, change the line
+    Type=simple
+	to
+	Type=idle
   - ha-bridge should now be available at http://192.168.1.2:8080
   - Go to that web page and add all devices (for example)
 NOTE: This is the minimum info needed to define the device. You can fill in other fields if desired.
