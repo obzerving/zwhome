@@ -43,10 +43,23 @@ zwhome Software Installation
       /home/pi/Documents/openzwave-1.5/cpp/src
       /home/pi/Documents/openzwave-1.5/cpp/src/platform
       /home/pi/Documents/openzwave-1.5/cpp/src/value_classes
+      /home/pi/Documents/openzwave-1.5/cpp/tinyxml
     - linker
       /usr/lib/arm-linux-gnueabihf
 - Import zwhome source code, located at https://github.com/obzerving/zwhome into codeblocks
 - Edit zwDevices.cpp for path to open-zwave-1.5/config
+- Download a zip file of the repository https://github.com/cesanta/mongoose
+- Unzip the file and import only mongoose.c and mongoose.h
+- Edit mongoose.h to modify the following compiler option (starting at line 3266 in the version I downloaded):
+
+#ifndef MG_ENABLE_THREADS /* ifdef-ok */
+#if defined(_WIN32) || defined(linux)
+#define MG_ENABLE_THREADS 1
+#else
+#define MG_ENABLE_THREADS 0
+#endif
+#endif
+
 - Compile and build zwhome
 - Make a directory to put zwhome executable
   - mkdir /home/pi/zwhome
